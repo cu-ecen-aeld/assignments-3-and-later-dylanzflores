@@ -1,3 +1,6 @@
 [submodule "assignment-autotest"]
 	path = assignment-autotest
 	url = https://github.com/cu-ecen-aeld/assignment-autotest.git
+[submodule "finder-app/tmp/aeld/linux-stable"]
+	path = finder-app/tmp/aeld/linux-stable
+	url = https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git

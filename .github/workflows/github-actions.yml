@@ -1,10 +1,10 @@
 name: assignment-test
 on:
-    push:
-        tags-ignore:
-            - '*'
-        branches:
-            - '*'
+  push:
+    tags-ignore:
+      - '*'
+    branches:
+      - '*'
 jobs:
   unit-test:
     container: cuaesd/aesd-autotest:24-unit-test
@@ -14,6 +14,13 @@ jobs:
         with:
           submodules: recursive
           clean: true
+          fetch-depth: 0
+      
+      - name: Initialize submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive --force
+
       - name: Run unit test
         run: ./unit-test.sh
 
@@ -25,5 +32,13 @@ jobs:
         with:
           submodules: recursive
           clean: true
+          fetch-depth: 0
+      
+      - name: Initialize submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive --force
+
       - name: Run full test
         run: ./full-test.sh
+

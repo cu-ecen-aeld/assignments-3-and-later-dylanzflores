@@ -10,7 +10,8 @@ KERNEL_VERSION=v5.15.163
 BUSYBOX_VERSION=1_33_1
 ARCH=arm64
 FINDER_APP_DIR=$(realpath "$(dirname "$0")")
-CROSS_COMPILE=aarch64-linux-gnu-
+#CROSS_COMPILE=aarch64-linux-gnu-
+CROSS_COMPILE=aarch64-none-linux-gnu-
 
 echo "Using output directory: $OUTDIR"
 

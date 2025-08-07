@@ -22,6 +22,11 @@ fi
 echo "OUTDIR is set to: ${OUTDIR}"
 mkdir -p ${OUTDIR}
 mkdir -p ${OUTDIR}/rootfs/home
+if ! command -v "${CROSS_COMPILE}gcc" &>/dev/null; then
+    echo " ${CROSS_COMPILE}gcc not found. Installing..."
+    sudo apt-get update
+    sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+fi
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/linux-stable" ]; then

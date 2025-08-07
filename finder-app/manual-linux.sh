@@ -63,7 +63,7 @@ rm -rf "${OUTDIR}/busybox"
 CLONE_ATTEMPTS=3
 for i in $(seq 1 $CLONE_ATTEMPTS); do
     echo "📦 Attempt $i: Cloning BusyBox..."
-    git clone https://busybox.net/git/busybox.git "${OUTDIR}/busybox" && break
+    git clone https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git "${OUTDIR}/busybox" && break
     echo "⚠️ Clone attempt $i failed. Retrying in 5s..."
     rm -rf "${OUTDIR}/busybox"
     sleep 5

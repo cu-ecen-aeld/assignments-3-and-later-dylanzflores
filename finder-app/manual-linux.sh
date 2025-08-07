@@ -59,8 +59,23 @@ mkdir -p usr/bin usr/lib usr/sbin
 mkdir -p var/log
 
 rm -rf "${OUTDIR}/busybox"
-git clone https://busybox.net/busybox.git "${OUTDIR}/busybox"
+
+CLONE_ATTEMPTS=3
+for i in $(seq 1 $CLONE_ATTEMPTS); do
+    echo "📦 Attempt $i: Cloning BusyBox..."
+    git clone https://busybox.net/git/busybox.git "${OUTDIR}/busybox" && break
+    echo "⚠️ Clone attempt $i failed. Retrying in 5s..."
+    rm -rf "${OUTDIR}/busybox"
+    sleep 5
+done
+
+if [ ! -d "${OUTDIR}/busybox" ]; then
+    echo "❌ Failed to clone BusyBox after $CLONE_ATTEMPTS attempts."
+    exit 1
+fi
+
 cd "${OUTDIR}/busybox"
+
 git checkout ${BUSYBOX_VERSION}
 make distclean
 make defconfig

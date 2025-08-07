@@ -59,7 +59,7 @@ mkdir -p usr/bin usr/lib usr/sbin
 mkdir -p var/log
 
 rm -rf "${OUTDIR}/busybox"
-git clone git://busybox.net/busybox.git "${OUTDIR}/busybox"
+git clone https://busybox.net/busybox.git "${OUTDIR}/busybox"
 cd "${OUTDIR}/busybox"
 git checkout ${BUSYBOX_VERSION}
 make distclean

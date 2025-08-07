@@ -15,7 +15,21 @@ jobs:
           submodules: recursive
           clean: true
           fetch-depth: 0
-      
+
+      - name: Debug git config and .gitmodules
+        run: |
+          echo "=== .gitmodules ==="
+          cat .gitmodules || echo "No .gitmodules found"
+          echo
+          echo "=== .git/config ==="
+          cat .git/config || echo "No .git/config found"
+          echo
+          echo "=== git remote -v ==="
+          git remote -v
+          echo
+          echo "=== git config --list ==="
+          git config --list
+
       - name: Initialize submodules
         run: |
           git submodule sync --recursive
@@ -33,7 +47,21 @@ jobs:
           submodules: recursive
           clean: true
           fetch-depth: 0
-      
+
+      - name: Debug git config and .gitmodules
+        run: |
+          echo "=== .gitmodules ==="
+          cat .gitmodules || echo "No .gitmodules found"
+          echo
+          echo "=== .git/config ==="
+          cat .git/config || echo "No .git/config found"
+          echo
+          echo "=== git remote -v ==="
+          git remote -v
+          echo
+          echo "=== git config --list ==="
+          git config --list
+
       - name: Initialize submodules
         run: |
           git submodule sync --recursive

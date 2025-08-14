@@ -1,4 +1,5 @@
 #!/bin/sh
+exec > /tmp/assignment4-result.txt 2>&1
 # Tester script for assignment 1 and assignment 2
 # Author: Siddhant Jajoo
 

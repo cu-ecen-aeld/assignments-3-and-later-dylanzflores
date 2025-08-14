@@ -1,8 +1,3 @@
-# Use the compiler passed in by Buildroot
-CC ?= gcc
-
-CFLAGS = -Wall -g -static
-
 WRITER_SRC = writer.c
 FINDER_SRC = finder.c
 

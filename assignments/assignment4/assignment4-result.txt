@@ -1,0 +1,26 @@
+Using default value AELD_IS_FUN for string to write
+Using default value 10 for number of files to write
+Writing 10 files containing string AELD_IS_FUN to /tmp/aeld-data
+/tmp/aeld-data created
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores1.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores2.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores3.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores4.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores5.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores6.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores7.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores8.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores9.txt'
+Creating directory: /tmp/aeld-data
+Successfully wrote to '/tmp/aeld-data/dylanzflores10.txt'
+The number of files are 10 and the number of matching lines are 10
+success

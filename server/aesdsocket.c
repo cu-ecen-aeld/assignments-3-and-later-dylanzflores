@@ -84,19 +84,17 @@ void handle_client(int client_fd) {
     }
 
     while ((bytes_read = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-        if (write(data_fd, buffer, bytes_read) != bytes_read) {
-            perror("write");
-            close(data_fd);
-            return;
-        }
-
-        // Stop on newline (packet complete)
-        if (memchr(buffer, '\n', bytes_read)) {
-            break;
-        }
-
-       // memset(buffer, 0, sizeof(buffer)); // Clear buffer for next read
+    if (write(data_fd, buffer, bytes_read) != bytes_read) {
+        perror("write");
+        close(data_fd);
+        return;
     }
+
+    if (memchr(buffer, '\n', bytes_read)) {
+        break;  // Stop after reading newline
+    }
+}
+
 
     close(data_fd);
 

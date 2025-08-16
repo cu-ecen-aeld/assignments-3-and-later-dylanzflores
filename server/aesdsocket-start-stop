@@ -1,0 +1,47 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          aesdsocket
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start and stop the aesdsocket daemon
+### END INIT INFO
+
+DAEMON=/usr/bin/aesdsocket
+DAEMON_NAME=aesdsocket
+PIDFILE=/var/run/${DAEMON_NAME}.pid
+
+[ -x "$DAEMON" ] || exit 1
+
+case "$1" in
+    start)
+        echo "Starting $DAEMON_NAME..."
+        mkdir -p /var/run
+        if start-stop-daemon --start --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON -- -d; then
+            echo "$DAEMON_NAME started."
+        else
+            echo "Failed to start $DAEMON_NAME."
+        fi
+        ;;
+    stop)
+        echo "Stopping $DAEMON_NAME..."
+        if start-stop-daemon --stop --pidfile $PIDFILE --retry=TERM/30/KILL/5; then
+            echo "$DAEMON_NAME stopped."
+        else
+            echo "Failed to stop $DAEMON_NAME."
+        fi
+        ;;
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0
+

@@ -178,22 +178,32 @@ int main(int argc, char *argv[]) {
     }
 
     if (daemon_mode) {
-        pid_t pid = fork();
-        if (pid < 0) {
-            perror("fork");
-            exit(EXIT_FAILURE);
-        } else if (pid > 0) {
-            exit(EXIT_SUCCESS); // Parent exits
-        }
-
-        // Child becomes daemon
-        if (setsid() == -1) exit(EXIT_FAILURE);
-        chdir("/");
-        close(STDIN_FILENO);
-        close(STDOUT_FILENO);
-        close(STDERR_FILENO);
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid > 0) {
+        exit(EXIT_SUCCESS); // Parent exits
     }
-    remove(DATA_FILE);
+
+    if (setsid() == -1) exit(EXIT_FAILURE);
+    chdir("/");
+
+    if (remove(DATA_FILE) == -1 && errno != ENOENT) {
+        perror("remove");
+        syslog(LOG_ERR, "Failed to remove %s: %s", DATA_FILE, strerror(errno));
+    }
+
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+} else {
+    if (remove(DATA_FILE) == -1 && errno != ENOENT) {
+        perror("remove");
+        syslog(LOG_ERR, "Failed to remove %s: %s", DATA_FILE, strerror(errno));
+    }
+}
+
     while (!exit_requested) {
         struct sockaddr_in client_addr;
         socklen_t addr_len = sizeof(client_addr);

@@ -7,10 +7,12 @@ CFLAGS := -Wall -Werror -Wextra -g
 
 all: $(TARGET)
 
-default: all
+aesdsocket: aesdsocket.o
+	$(CC) $(CFLAGS) -o $@ $^
 
-$(TARGET): aesdsocket.c
-	$(CC) $(CFLAGS) -o $@ $<
+aesdsocket.o: aesdsocket.c
+	$(CC) $(CFLAGS) -c $<
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) aesdsocket.o
+

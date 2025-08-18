@@ -76,44 +76,72 @@ void handle_client(int client_fd) {
     ssize_t bytes_read;
     int data_fd;
 
-    // Receiving data and appending to file
+    // Open file in append mode
     data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
-    //data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-
     if (data_fd == -1) {
         perror("open for append");
+        syslog(LOG_ERR, "Failed to open %s for append: %s", DATA_FILE, strerror(errno));
         return;
     }
 
+    // Receive data from client and write to file
     while ((bytes_read = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-        if (write(data_fd, buffer, bytes_read) != bytes_read) {
+        ssize_t bytes_written = write(data_fd, buffer, bytes_read);
+        if (bytes_written != bytes_read) {
             perror("write");
+            syslog(LOG_ERR, "Failed to write all bytes to %s", DATA_FILE);
             close(data_fd);
             return;
         }
+        fsync(data_fd);  // Ensure data is flushed
 
-        // Stop on newline (packet complete)
+        syslog(LOG_DEBUG, "Received and wrote %zd bytes", bytes_read);
+
+        // Stop receiving if newline received
         if (memchr(buffer, '\n', bytes_read)) {
             break;
         }
+        // Clear buffer for next recv (optional)
+        memset(buffer, 0, sizeof(buffer));
+    }
 
-       // memset(buffer, 0, sizeof(buffer)); // Clear buffer for next read
+    if (bytes_read == -1) {
+        perror("recv");
+        syslog(LOG_ERR, "Error during recv: %s", strerror(errno));
+        close(data_fd);
+        return;
     }
 
     close(data_fd);
 
-    // Send file contents back to client
+    // Open file for reading to send back to client
     data_fd = open(DATA_FILE, O_RDONLY);
     if (data_fd == -1) {
         perror("open for read");
+        syslog(LOG_ERR, "Failed to open %s for reading: %s", DATA_FILE, strerror(errno));
         return;
     }
 
+    // Read file and send contents to client
     while ((bytes_read = read(data_fd, buffer, sizeof(buffer))) > 0) {
-        if (send(client_fd, buffer, bytes_read, 0) == -1) {
-            perror("send");
-            break;
+        ssize_t bytes_sent = 0;
+        while (bytes_sent < bytes_read) {
+            ssize_t ret = send(client_fd, buffer + bytes_sent, bytes_read - bytes_sent, 0);
+            if (ret == -1) {
+                perror("send");
+                syslog(LOG_ERR, "Send failed: %s", strerror(errno));
+                close(data_fd);
+                return;
+            }
+            bytes_sent += ret;
         }
+        syslog(LOG_DEBUG, "Sent %zd bytes to client", bytes_sent);
+        memset(buffer, 0, sizeof(buffer));
+    }
+
+    if (bytes_read == -1) {
+        perror("read");
+        syslog(LOG_ERR, "Error reading file: %s", strerror(errno));
     }
 
     close(data_fd);

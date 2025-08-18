@@ -1,4 +1,4 @@
-CC ?= gcc
+CC ?= $(TARGET_CC)
 CFLAGS = -Wall -Werror -Wextra -g
 
 TARGET = aesdsocket

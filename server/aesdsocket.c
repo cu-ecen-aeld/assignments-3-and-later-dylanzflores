@@ -77,8 +77,8 @@ void handle_client(int client_fd) {
     int data_fd;
 
     // Receiving data and appending to file
-    //data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
-    data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
+    //data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_TRUNC, 0644);
 
     if (data_fd == -1) {
         perror("open for append");

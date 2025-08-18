@@ -1,21 +1,14 @@
+CC = cc
+CFLAGS = -Wall -Werror -Wextra -g
+
 TARGET = aesdsocket
-
-CC ?= gcc
-CFLAGS := -Wall -Werror -Wextra -g
-
-.PHONY: all clean
 
 all: $(TARGET)
 
-default: all
-
-# Link target from object file
-$(TARGET): aesdsocket.o
-	$(CC) $(CFLAGS) -o $@ $^
-
-# Compile source to object
-aesdsocket.o: aesdsocket.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(TARGET): aesdsocket.c
+	$(CC) $(CFLAGS) -o $@ $<
 
 clean:
-	rm -f $(TARGET) aesdsocket.o
+	rm -f $(TARGET) *.o
+
+.PHONY: all clean

@@ -1,4 +1,4 @@
-CC = $(TARGET_CC)
+CC ?= $(TARGET_CC)
 CFLAGS = -Wall -Werror -Wextra -g
 
 WRITER_SRC = writer.c

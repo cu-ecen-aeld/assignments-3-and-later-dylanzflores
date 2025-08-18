@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
     }
-
+    remove(DATA_FILE);
     while (!exit_requested) {
         struct sockaddr_in client_addr;
         socklen_t addr_len = sizeof(client_addr);

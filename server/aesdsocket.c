@@ -15,7 +15,7 @@
 
 #define PORT "9000"
 #define BACKLOG 10
-#define DATA_FILE "/tmp/aesdsocketdata"
+#define DATA_FILE "/var/tmp/aesdsocketdata"
 
 volatile sig_atomic_t exit_requested = 0;
 

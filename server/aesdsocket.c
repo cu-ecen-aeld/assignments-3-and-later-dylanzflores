@@ -76,8 +76,7 @@ void handle_client(int client_fd) {
     ssize_t bytes_read;
     int data_fd;
 
-    // Open file in append mode
-    data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
+    data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_TRUNC, 0644);
     if (data_fd == -1) {
         perror("open for append");
         syslog(LOG_ERR, "Failed to open %s for append: %s", DATA_FILE, strerror(errno));

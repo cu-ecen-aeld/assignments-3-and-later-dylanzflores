@@ -84,26 +84,35 @@ void handle_client(int client_fd) {
         return;
     }
 
-    // Receive data from client and write to file
     while ((bytes_read = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-        ssize_t bytes_written = write(data_fd, buffer, bytes_read);
-        if (bytes_written != bytes_read) {
-            perror("write");
-            syslog(LOG_ERR, "Failed to write all bytes to %s", DATA_FILE);
-            close(data_fd);
-            return;
-        }
-        fsync(data_fd);  // Ensure data is flushed
-
-        syslog(LOG_DEBUG, "Received and wrote %zd bytes", bytes_read);
-
-        // Stop receiving if newline received
-        if (memchr(buffer, '\n', bytes_read)) {
-            break;
-        }
-        // Clear buffer for next recv (optional)
-        memset(buffer, 0, sizeof(buffer));
+    ssize_t bytes_written = write(data_fd, buffer, bytes_read);
+    if (bytes_written == -1) {
+        perror("write");
+        syslog(LOG_ERR, "Write error: %s", strerror(errno));
+        close(data_fd);
+        return;
     }
+    if (bytes_written != bytes_read) {
+        syslog(LOG_WARNING, "Partial write: wrote %zd of %zd bytes", bytes_written, bytes_read);
+        // You might want to handle partial writes here
+    }
+
+    syslog(LOG_DEBUG, "Received %zd bytes, wrote %zd bytes", bytes_read, bytes_written);
+
+    // Optional: print buffer content for debugging (careful with non-printable data)
+    buffer[bytes_read] = '\0'; // null terminate for safe printing
+    syslog(LOG_DEBUG, "Buffer content: %s", buffer);
+
+    if (memchr(buffer, '\n', bytes_read)) {
+        syslog(LOG_DEBUG, "Newline detected, stopping receive loop");
+        break;
+    }
+}
+if (bytes_read == -1) {
+    perror("recv");
+    syslog(LOG_ERR, "Receive error: %s", strerror(errno));
+}
+
 
     if (bytes_read == -1) {
         perror("recv");

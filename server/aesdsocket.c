@@ -21,16 +21,25 @@
 
 volatile sig_atomic_t exit_requested = 0;
 pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
+int sockfd = -1;  // global
 
 void signal_handler(int sig) {
     (void)sig;
     syslog(LOG_INFO, "Caught signal, exiting");
     exit_requested = 1;
+
+    // Important: unblock accept()
+    if (sockfd != -1) {
+        shutdown(sockfd, SHUT_RDWR);
+        close(sockfd);
+        sockfd = -1;
+    }
 }
+
 
 int setup_socket(void) {
     struct addrinfo hints = {0}, *res = NULL;
-    int sockfd, yes = 1;
+    int yes = 1;
 
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
@@ -82,7 +91,6 @@ typedef struct thread_info {
 
 thread_info_t *thread_list = NULL;
 pthread_mutex_t thread_list_mutex = PTHREAD_MUTEX_INITIALIZER;
-
 void *handle_client(void *arg) {
     thread_info_t *thread = (thread_info_t *)arg;
     int client_fd = thread->client_fd;
@@ -105,22 +113,6 @@ void *handle_client(void *arg) {
 
     // Read client data until newline or connection closed
     while ((bytes_read = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-        // Get current time and write timestamp before data
-        time_t now = time(NULL);
-        struct tm timeinfo;
-        localtime_r(&now, &timeinfo);
-        char timestr[128];
-        if (strftime(timestr, sizeof(timestr),
-                     "timestamp:%a, %d %b %Y %H:%M:%S %z\n", &timeinfo) == 0) {
-            syslog(LOG_ERR, "strftime failed");
-        } else {
-            ssize_t ts_len = strlen(timestr);
-            ssize_t ts_written = write(data_fd, timestr, ts_len);
-            if (ts_written != ts_len) {
-                syslog(LOG_ERR, "Failed to write full timestamp");
-            }
-        }
-
         // Write the received data
         ssize_t bytes_written = write(data_fd, buffer, bytes_read);
         if (bytes_written == -1) {
@@ -201,49 +193,50 @@ void *handle_client(void *arg) {
     return NULL;
 }
 
-void *timestamp_thread_func(void *arg) {
+void *timestamp_thread_func(void *arg)
+{
     (void)arg;
-    char timestamp[128];
     time_t now;
     struct tm timeinfo;
+    char timestamp[128];
     int data_fd;
 
     while (!exit_requested) {
-        sleep(10);
+        // Sleep in 1-second intervals so we can check exit_requested
+        for (int i = 0; i < 10; i++) {
+            if (exit_requested) {
+                pthread_exit(NULL);
+            }
+            sleep(1);
+        }
+
+        if (exit_requested) break;
 
         time(&now);
         localtime_r(&now, &timeinfo);
 
         if (strftime(timestamp, sizeof(timestamp),
-                     "timestamp:%a, %d %b %Y %H:%M:%S %z\n", &timeinfo) == 0) {
+                     "timestamp:%a, %d %b %Y %H:%M:%S %z\n",
+                     &timeinfo) == 0)
+        {
             syslog(LOG_ERR, "strftime failed");
             continue;
         }
 
         pthread_mutex_lock(&file_mutex);
         data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
-        if (data_fd == -1) {
-            syslog(LOG_ERR, "Failed to open %s for append: %s", DATA_FILE, strerror(errno));
-            pthread_mutex_unlock(&file_mutex);
-            continue;
-        }
-
-        size_t len = strlen(timestamp);
-        size_t total_written = 0;
-        while (total_written < len) {
-            ssize_t written = write(data_fd, timestamp + total_written, len - total_written);
-            if (written == -1) {
-                syslog(LOG_ERR, "Failed to write timestamp: %s", strerror(errno));
-                break;
+        if (data_fd != -1) {
+            if (write(data_fd, timestamp, strlen(timestamp)) == -1) {
+                syslog(LOG_ERR, "Failed to write timestamp");
             }
-            total_written += written;
+            close(data_fd);
+        } else {
+            syslog(LOG_ERR, "Failed to open data file for timestamp");
         }
-
-        close(data_fd);
         pthread_mutex_unlock(&file_mutex);
     }
 
-    return NULL;
+    pthread_exit(NULL);
 }
 
 int main(int argc, char *argv[]) {
@@ -265,7 +258,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    int sockfd = setup_socket();
+    sockfd = setup_socket();
     if (sockfd == -1) {
         syslog(LOG_ERR, "Failed to set up socket");
         exit(EXIT_FAILURE);
@@ -296,14 +289,18 @@ int main(int argc, char *argv[]) {
         struct sockaddr_in client_addr;
         socklen_t addr_len = sizeof(client_addr);
 
-        int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &addr_len);
-        if (client_fd == -1) {
-            if (errno == EINTR && exit_requested) {
-                break;
+            int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &addr_len);
+    if (client_fd == -1) {
+        if (errno == EINTR) {
+            if (exit_requested) {
+                break;  // exit cleanly after signal
             }
-            perror("accept");
-            continue;
+            continue;   // interrupted but not exiting yet
         }
+        perror("accept");
+        continue;
+    }
+
 
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));

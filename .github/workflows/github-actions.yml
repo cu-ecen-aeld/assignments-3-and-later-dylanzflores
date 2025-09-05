@@ -12,10 +12,12 @@ jobs:
     container: cuaesd/aesd-autotest:24-assignment6
     runs-on: self-hosted
     steps:
-      - name: Checkout repo (no recursive submodules)
+      - name: Checkout repo (force clean, no stale submodules)
         uses: actions/checkout@v2
         with:
-          submodules: false
+          fetch-depth: 0
+          clean: true
+          submodules: false   # don't pull all, we’ll init only the one we want
 
       - name: Init only assignment-autotest submodule
         run: git submodule update --init assignment-autotest

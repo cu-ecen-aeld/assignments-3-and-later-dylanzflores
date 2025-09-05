@@ -12,10 +12,14 @@ jobs:
     container: cuaesd/aesd-autotest:24-assignment6
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout repo (no recursive submodules)
+        uses: actions/checkout@v2
         with:
-          submodules: recursive   # pull all valid submodules
-          fetch-depth: 0          # avoid shallow clone issues
+          submodules: false
+
+      - name: Init only assignment-autotest submodule
+        run: git submodule update --init assignment-autotest
+
       - name: Run full test
         run: ./full-test.sh
 

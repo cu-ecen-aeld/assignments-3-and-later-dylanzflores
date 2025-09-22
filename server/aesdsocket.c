@@ -21,21 +21,19 @@
 
 volatile sig_atomic_t exit_requested = 0;
 pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
-int sockfd = -1;  // global
+int sockfd = -1;
 
 void signal_handler(int sig) {
     (void)sig;
     syslog(LOG_INFO, "Caught signal, exiting");
     exit_requested = 1;
 
-    // Important: unblock accept()
     if (sockfd != -1) {
         shutdown(sockfd, SHUT_RDWR);
         close(sockfd);
         sockfd = -1;
     }
 }
-
 
 int setup_socket(void) {
     struct addrinfo hints = {0}, *res = NULL;
@@ -91,19 +89,17 @@ typedef struct thread_info {
 
 thread_info_t *thread_list = NULL;
 pthread_mutex_t thread_list_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 void *handle_client(void *arg) {
     thread_info_t *thread = (thread_info_t *)arg;
     int client_fd = thread->client_fd;
-
     char buffer[1024];
     ssize_t bytes_read;
     int data_fd;
 
-    // Receive data and append to file, mutex protected
     pthread_mutex_lock(&file_mutex);
     data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
     if (data_fd == -1) {
-        perror("open for append");
         syslog(LOG_ERR, "Failed to open %s for append: %s", DATA_FILE, strerror(errno));
         pthread_mutex_unlock(&file_mutex);
         close(client_fd);
@@ -111,81 +107,49 @@ void *handle_client(void *arg) {
         return NULL;
     }
 
-    // Read client data until newline or connection closed
+    // Read until newline
     while ((bytes_read = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-        // Write the received data
-        ssize_t bytes_written = write(data_fd, buffer, bytes_read);
-        if (bytes_written == -1) {
-            perror("write");
-            syslog(LOG_ERR, "Write error: %s", strerror(errno));
-            close(data_fd);
-            pthread_mutex_unlock(&file_mutex);
-            close(client_fd);
-            thread->thread_complete = 1;
-            return NULL;
-        }
-
-        // Append newline if data doesn't end with one
-        if (buffer[bytes_read - 1] != '\n') {
-            if (write(data_fd, "\n", 1) == -1) {
-                syslog(LOG_ERR, "Failed to write newline after client data");
-            }
-        }
-
-        // Logging for debug
-        if (bytes_read < (ssize_t)sizeof(buffer)) {
-            buffer[bytes_read] = '\0'; // null terminate safely
-            syslog(LOG_DEBUG, "Received and wrote: %s", buffer);
-        }
-
-        if (memchr(buffer, '\n', bytes_read)) {
-            break;  // Stop reading after newline
-        }
-    }
-
-    if (bytes_read == -1) {
-        perror("recv");
-        syslog(LOG_ERR, "Receive error: %s", strerror(errno));
-    }
-
-    close(data_fd);
-    pthread_mutex_unlock(&file_mutex);
-
-    // Send back full file contents, mutex protected
-    pthread_mutex_lock(&file_mutex);
-    data_fd = open(DATA_FILE, O_RDONLY);
-    if (data_fd == -1) {
-        perror("open for read");
-        syslog(LOG_ERR, "Failed to open %s for reading: %s", DATA_FILE, strerror(errno));
-        pthread_mutex_unlock(&file_mutex);
-        close(client_fd);
-        thread->thread_complete = 1;
-        return NULL;
-    }
-
-    while ((bytes_read = read(data_fd, buffer, sizeof(buffer))) > 0) {
-        ssize_t bytes_sent = 0;
-        while (bytes_sent < bytes_read) {
-            ssize_t ret = send(client_fd, buffer + bytes_sent, bytes_read - bytes_sent, 0);
+        ssize_t written = 0;
+        while (written < bytes_read) {
+            ssize_t ret = write(data_fd, buffer + written, bytes_read - written);
             if (ret == -1) {
-                perror("send");
-                syslog(LOG_ERR, "Send failed: %s", strerror(errno));
+                syslog(LOG_ERR, "Write error: %s", strerror(errno));
                 close(data_fd);
                 pthread_mutex_unlock(&file_mutex);
                 close(client_fd);
                 thread->thread_complete = 1;
                 return NULL;
             }
-            bytes_sent += ret;
+            written += ret;
         }
-    }
 
-    if (bytes_read == -1) {
-        perror("read");
-        syslog(LOG_ERR, "Error reading file: %s", strerror(errno));
+        if (memchr(buffer, '\n', bytes_read)) break;
     }
 
     close(data_fd);
+    pthread_mutex_unlock(&file_mutex);
+
+    // Send file back
+    pthread_mutex_lock(&file_mutex);
+    data_fd = open(DATA_FILE, O_RDONLY);
+    if (data_fd != -1) {
+        while ((bytes_read = read(data_fd, buffer, sizeof(buffer))) > 0) {
+            ssize_t sent = 0;
+            while (sent < bytes_read) {
+                ssize_t ret = send(client_fd, buffer + sent, bytes_read - sent, 0);
+                if (ret == -1) {
+                    syslog(LOG_ERR, "Send failed: %s", strerror(errno));
+                    close(data_fd);
+                    pthread_mutex_unlock(&file_mutex);
+                    close(client_fd);
+                    thread->thread_complete = 1;
+                    return NULL;
+                }
+                sent += ret;
+            }
+        }
+        close(data_fd);
+    }
     pthread_mutex_unlock(&file_mutex);
 
     close(client_fd);
@@ -193,136 +157,81 @@ void *handle_client(void *arg) {
     return NULL;
 }
 
-void *timestamp_thread_func(void *arg)
-{
+void *timestamp_thread_func(void *arg) {
     (void)arg;
-    time_t now;
-    struct tm timeinfo;
-    char timestamp[128];
-    int data_fd;
-
     while (!exit_requested) {
-        // Sleep in 1-second intervals so we can check exit_requested
-        for (int i = 0; i < 10; i++) {
-            if (exit_requested) {
-                pthread_exit(NULL);
-            }
-            sleep(1);
-        }
-
+        sleep(10); // exactly every 10 seconds
         if (exit_requested) break;
 
-        time(&now);
+        time_t now = time(NULL);
+        struct tm timeinfo;
         localtime_r(&now, &timeinfo);
 
-        if (strftime(timestamp, sizeof(timestamp),
-                     "timestamp:%a, %d %b %Y %H:%M:%S %z\n",
-                     &timeinfo) == 0)
-        {
-            syslog(LOG_ERR, "strftime failed");
-            continue;
-        }
+        char timestamp[128];
+        strftime(timestamp, sizeof(timestamp),
+                 "timestamp:%a, %d %b %Y %H:%M:%S +0000\n", &timeinfo);
 
         pthread_mutex_lock(&file_mutex);
-        data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
-        if (data_fd != -1) {
-            if (write(data_fd, timestamp, strlen(timestamp)) == -1) {
-                syslog(LOG_ERR, "Failed to write timestamp");
-            }
-            close(data_fd);
-        } else {
-            syslog(LOG_ERR, "Failed to open data file for timestamp");
+        int fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
+        if (fd != -1) {
+            write(fd, timestamp, strlen(timestamp));
+            close(fd);
         }
         pthread_mutex_unlock(&file_mutex);
     }
-
-    pthread_exit(NULL);
+    return NULL;
 }
 
 int main(int argc, char *argv[]) {
-    int daemon_mode = 0;
+    int daemon_mode = (argc == 2 && strcmp(argv[1], "-d") == 0);
     pthread_t timestamp_thread;
-
-    if (argc == 2 && strcmp(argv[1], "-d") == 0) {
-        daemon_mode = 1;
-    }
 
     openlog("aesdsocket", LOG_PID, LOG_USER);
 
     struct sigaction sa = {0};
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;//SA_RESTART;
-    if (sigaction(SIGINT, &sa, NULL) == -1 || sigaction(SIGTERM, &sa, NULL) == -1) {
-        perror("sigaction");
-        exit(EXIT_FAILURE);
-    }
+    sa.sa_flags = 0;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
 
     sockfd = setup_socket();
-    if (sockfd == -1) {
-        syslog(LOG_ERR, "Failed to set up socket");
-        exit(EXIT_FAILURE);
-    }
+    if (sockfd == -1) exit(EXIT_FAILURE);
 
     if (daemon_mode) {
         pid_t pid = fork();
         if (pid < 0) exit(EXIT_FAILURE);
         if (pid > 0) exit(EXIT_SUCCESS);
-
-        if (setsid() == -1 || chdir("/") == -1) exit(EXIT_FAILURE);
+        setsid();
+        chdir("/");
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
     }
 
-    if (remove(DATA_FILE) == -1 && errno != ENOENT) {
-        syslog(LOG_ERR, "Failed to remove %s: %s", DATA_FILE, strerror(errno));
-    }
+    remove(DATA_FILE);
 
-    if (pthread_create(&timestamp_thread, NULL, timestamp_thread_func, NULL) != 0) {
-        syslog(LOG_ERR, "Failed to create timestamp thread");
-        close(sockfd);
-        exit(EXIT_FAILURE);
-    }
+    pthread_create(&timestamp_thread, NULL, timestamp_thread_func, NULL);
 
     while (!exit_requested) {
         struct sockaddr_in client_addr;
         socklen_t addr_len = sizeof(client_addr);
-
-            int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &addr_len);
-    if (client_fd == -1) {
-        if (errno == EINTR) {
-            if (exit_requested) {
-                break;  // exit cleanly after signal
-            }
-            continue;   // interrupted but not exiting yet
+        int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &addr_len);
+        if (client_fd == -1) {
+            if (errno == EINTR && exit_requested) break;
+            continue;
         }
-        perror("accept");
-        continue;
-    }
-
 
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
         syslog(LOG_INFO, "Accepted connection from %s", client_ip);
 
         thread_info_t *new_thread = malloc(sizeof(thread_info_t));
-        if (!new_thread) {
-            syslog(LOG_ERR, "Failed to allocate memory for thread_info");
-            close(client_fd);
-            continue;
-        }
-
         new_thread->client_fd = client_fd;
         new_thread->thread_complete = 0;
         new_thread->next = NULL;
 
-        if (pthread_create(&new_thread->thread_id, NULL, handle_client, new_thread) != 0) {
-            syslog(LOG_ERR, "Failed to create client thread");
-            close(client_fd);
-            free(new_thread);
-            continue;
-        }
+        pthread_create(&new_thread->thread_id, NULL, handle_client, new_thread);
 
         pthread_mutex_lock(&thread_list_mutex);
         new_thread->next = thread_list;
@@ -337,10 +246,9 @@ int main(int argc, char *argv[]) {
                 pthread_join((*curr)->thread_id, NULL);
                 thread_info_t *to_delete = *curr;
                 *curr = (*curr)->next;
-                // client_fd already closed inside handle_client
                 free(to_delete);
             } else {
-                curr = &((*curr)->next);
+                curr = &(*curr)->next;
             }
         }
         pthread_mutex_unlock(&thread_list_mutex);
@@ -348,7 +256,7 @@ int main(int argc, char *argv[]) {
 
     pthread_join(timestamp_thread, NULL);
 
-    // Final cleanup: join remaining client threads
+    // Cleanup remaining threads
     pthread_mutex_lock(&thread_list_mutex);
     thread_info_t *curr = thread_list;
     while (curr) {
@@ -362,7 +270,6 @@ int main(int argc, char *argv[]) {
     close(sockfd);
     remove(DATA_FILE);
     closelog();
-
     return 0;
 }
 

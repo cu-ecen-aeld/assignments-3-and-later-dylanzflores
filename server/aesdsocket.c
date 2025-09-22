@@ -97,60 +97,65 @@ void *handle_client(void *arg) {
     ssize_t bytes_read;
     int data_fd;
 
-    pthread_mutex_lock(&file_mutex);
-    data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
-    if (data_fd == -1) {
-        syslog(LOG_ERR, "Failed to open %s for append: %s", DATA_FILE, strerror(errno));
-        pthread_mutex_unlock(&file_mutex);
-        close(client_fd);
-        return NULL;
-    }
+    // Accumulate data from client until a newline
+    size_t total_len = 0;
+    char *msg_buf = NULL;
 
-    // Receive data until newline and write to file
     while ((bytes_read = recv(client_fd, buffer, sizeof(buffer), 0)) > 0) {
-        ssize_t written = 0;
-        while (written < bytes_read) {
-            ssize_t w = write(data_fd, buffer + written, bytes_read - written);
-            if (w == -1) {
-                syslog(LOG_ERR, "Write error: %s", strerror(errno));
-                close(data_fd);
-                pthread_mutex_unlock(&file_mutex);
-                close(client_fd);
-                return NULL;
-            }
-            written += w;
+        char *new_buf = realloc(msg_buf, total_len + bytes_read);
+        if (!new_buf) {
+            free(msg_buf);
+            close(client_fd);
+            return NULL;
         }
+        msg_buf = new_buf;
+        memcpy(msg_buf + total_len, buffer, bytes_read);
+        total_len += bytes_read;
+
         if (memchr(buffer, '\n', bytes_read)) break; // stop at first newline
     }
 
-    close(data_fd);
-    pthread_mutex_unlock(&file_mutex);
+    if (total_len > 0) {
+        pthread_mutex_lock(&file_mutex);
+        data_fd = open(DATA_FILE, O_CREAT | O_WRONLY | O_APPEND, 0644);
+        if (data_fd != -1) {
+            ssize_t written = 0;
+            while (written < total_len) {
+                ssize_t w = write(data_fd, msg_buf + written, total_len - written);
+                if (w == -1) {
+                    syslog(LOG_ERR, "Write error: %s", strerror(errno));
+                    break;
+                }
+                written += w;
+            }
+            close(data_fd);
+        } else {
+            syslog(LOG_ERR, "Failed to open %s for append: %s", DATA_FILE, strerror(errno));
+        }
+        pthread_mutex_unlock(&file_mutex);
+    }
 
-    // Send full file contents back
+    free(msg_buf);
+
+    // Send full file contents back to client
     pthread_mutex_lock(&file_mutex);
     data_fd = open(DATA_FILE, O_RDONLY);
-    if (data_fd == -1) {
-        syslog(LOG_ERR, "Failed to open %s for read: %s", DATA_FILE, strerror(errno));
-        pthread_mutex_unlock(&file_mutex);
-        close(client_fd);
-        return NULL;
-    }
-
-    while ((bytes_read = read(data_fd, buffer, sizeof(buffer))) > 0) {
-        ssize_t sent = 0;
-        while (sent < bytes_read) {
-            ssize_t s = send(client_fd, buffer + sent, bytes_read - sent, 0);
-            if (s == -1) {
-                syslog(LOG_ERR, "Send failed: %s", strerror(errno));
-                close(data_fd);
-                pthread_mutex_unlock(&file_mutex);
-                close(client_fd);
-                return NULL;
+    if (data_fd != -1) {
+        while ((bytes_read = read(data_fd, buffer, sizeof(buffer))) > 0) {
+            ssize_t sent = 0;
+            while (sent < bytes_read) {
+                ssize_t s = send(client_fd, buffer + sent, bytes_read - sent, 0);
+                if (s == -1) {
+                    syslog(LOG_ERR, "Send failed: %s", strerror(errno));
+                    break;
+                }
+                sent += s;
             }
-            sent += s;
         }
+        close(data_fd);
+    } else {
+        syslog(LOG_ERR, "Failed to open %s for read: %s", DATA_FILE, strerror(errno));
     }
-    close(data_fd);
     pthread_mutex_unlock(&file_mutex);
 
     close(client_fd);
